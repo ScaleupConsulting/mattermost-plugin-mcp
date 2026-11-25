@@ -327,7 +327,7 @@ func (o *oauthServer) handleAuthorize(w http.ResponseWriter, r *http.Request, se
 
 	userID := r.Header.Get("Mattermost-User-Id")
 	if userID == "" {
-		http.Redirect(w, r, strings.TrimRight(o.siteURL(), "/")+"/login?redirect_to="+url.QueryEscape(r.URL.RequestURI()), http.StatusFound)
+		http.Redirect(w, r, o.loginURL(r), http.StatusFound)
 		return
 	}
 	user, appErr := o.api.GetUser(userID)
@@ -403,6 +403,16 @@ func (o *oauthServer) handleAuthorizeDecision(w http.ResponseWriter, r *http.Req
 		return
 	}
 	http.Redirect(w, r, o.redirectWith(ar.RedirectURI, map[string]string{"code": code, "state": ar.State}), http.StatusSeeOther)
+}
+
+// loginURL sends a signed-out browser to Mattermost's login page and back to this request. The
+// plugin sees its path with the /plugins/<id> prefix removed, so the prefix is put back.
+func (o *oauthServer) loginURL(r *http.Request) string {
+	back := "/plugins/" + pluginID + r.URL.RequestURI()
+	if u, err := url.Parse(o.siteURL()); err == nil {
+		back = strings.TrimRight(u.Path, "/") + back // a Site URL with a subpath
+	}
+	return strings.TrimRight(o.siteURL(), "/") + "/login?redirect_to=" + url.QueryEscape(back)
 }
 
 // redirectWith appends params and the issuer (RFC 9207) to a registered redirect URI.

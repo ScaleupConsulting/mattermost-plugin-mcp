@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds the plugin bundle inside a golang container, so no host toolchain is needed.
+# Builds the plugin bundle inside golang and node containers, so no host toolchain is needed.
 # Usage: build/docker-build.sh   (output: dist/<plugin id>-<version>.tar.gz)
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -18,9 +18,11 @@ go_run 'cd server && rm -rf dist && for arch in amd64 arm64; do CGO_ENABLED=0 GO
 
 ID="$(./build/bin/manifest id)"
 VERSION="$(./build/bin/manifest version)"
-rm -rf dist && mkdir -p "dist/$ID/server"
+docker run --rm -u "$UIDGID" -e HOME=/tmp -v "$ROOT:/src" -w /src/webapp node:24 sh -euc 'npm run build'
+rm -rf dist && mkdir -p "dist/$ID/server" "dist/$ID/webapp"
 ./build/bin/manifest dist
 cp -r server/dist "dist/$ID/server/"
+cp -r webapp/dist "dist/$ID/webapp/"
 cp LICENSE NOTICE "dist/$ID/"
 tar -C dist -czf "dist/$ID-$VERSION.tar.gz" "$ID"
 echo "plugin built at: dist/$ID-$VERSION.tar.gz"

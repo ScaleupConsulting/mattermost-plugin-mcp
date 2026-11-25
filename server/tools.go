@@ -545,8 +545,11 @@ func (t *toolset) GetUnreads() (string, error) {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%d channel(s) with unread posts, those with mentions first. Read them with read_channel and since=<last read>.\n", len(rows))
 	for _, r := range rows {
-		fmt.Fprintf(&b, "- %s id=%s: %d unread, %d mention(s), last read %s\n",
-			t.channelLabel(r.ch), r.ch.Id, r.unread, r.mentions, time.UnixMilli(r.viewedAt).UTC().Format(time.RFC3339))
+		lastRead := "never"
+		if r.viewedAt > 0 {
+			lastRead = time.UnixMilli(r.viewedAt).UTC().Format(time.RFC3339)
+		}
+		fmt.Fprintf(&b, "- %s id=%s: %d unread, %d mention(s), last read %s\n", t.channelLabel(r.ch), r.ch.Id, r.unread, r.mentions, lastRead)
 	}
 	return b.String(), nil
 }
@@ -565,8 +568,11 @@ func (t *toolset) GetMe() (string, error) {
 	for _, team := range teams {
 		names = append(names, team.Name)
 	}
-	return fmt.Sprintf("You are @%s (%s) id=%s, in teams: %s. Server: %s",
-		u.Username, strings.TrimSpace(u.GetFullName()), u.Id, strings.Join(names, ", "), t.siteURL), nil
+	who := "@" + u.Username
+	if name := strings.TrimSpace(u.GetFullName()); name != "" {
+		who += " (" + name + ")"
+	}
+	return fmt.Sprintf("You are %s id=%s, in teams: %s. Server: %s", who, u.Id, strings.Join(names, ", "), t.siteURL), nil
 }
 
 // FindUsers searches for active users who share a team with the caller.

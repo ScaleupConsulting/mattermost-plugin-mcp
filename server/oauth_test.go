@@ -437,7 +437,10 @@ func TestNotSignedInRedirectsToLogin(t *testing.T) {
 		"code_challenge": {challenge}, "code_challenge_method": {"S256"}}
 	rec := h.do(http.MethodGet, "/oauth/authorize?"+q.Encode(), nil, nil, nil)
 	assert.Equal(t, http.StatusFound, rec.Code)
-	assert.True(t, strings.HasPrefix(rec.Header().Get("Location"), "https://chat.example.com/login?redirect_to="))
+	loc, err := url.Parse(rec.Header().Get("Location"))
+	require.NoError(t, err)
+	assert.Equal(t, "/login", loc.Path)
+	assert.Equal(t, "/plugins/"+pluginID+"/oauth/authorize?"+q.Encode(), loc.Query().Get("redirect_to"), "back to the full plugin path")
 }
 
 func TestResourceMustMatch(t *testing.T) {

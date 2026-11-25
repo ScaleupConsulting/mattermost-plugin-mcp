@@ -1,0 +1,12 @@
+{
+  "name": "mattermost-plugin-mcp-webapp",
+  "private": true,
+  "description": "One small script, no dependencies: it needs no bundler.",
+  "scripts": {
+    "build": "node --check src/index.js && mkdir -p dist && cp src/index.js dist/main.js",
+    "debug": "npm run build",
+    "lint": "node --check src/index.js",
+    "check-types": "node --check src/index.js",
+    "test": "node --check src/index.js"
+  }
+}

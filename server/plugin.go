@@ -5,7 +5,6 @@ import (
 	"crypto/subtle"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -124,7 +123,7 @@ func (p *Plugin) sessionCSRF(r *http.Request) func() string {
 func (p *Plugin) requirePageUser(w http.ResponseWriter, r *http.Request) (*model.User, bool) {
 	userID := r.Header.Get("Mattermost-User-Id")
 	if userID == "" {
-		http.Redirect(w, r, p.siteURL()+"/login?redirect_to="+url.QueryEscape(r.URL.RequestURI()), http.StatusFound)
+		http.Redirect(w, r, p.oauth.loginURL(r), http.StatusFound)
 		return nil, false
 	}
 	user, appErr := p.mm.GetUser(userID)

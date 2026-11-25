@@ -80,5 +80,8 @@
                 "default": 30
             }
         ]
+    },
+    "webapp": {
+        "bundle_path": "webapp/dist/main.js"
     }
 }
