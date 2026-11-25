@@ -1,0 +1,84 @@
+{
+    "id": "com.scaleupconsulting.mcp",
+    "name": "MCP Server",
+    "description": "Lets AI assistants such as Claude read and, if allowed, post in Mattermost as the signed-in user, over a remote MCP server with its own OAuth sign-in.",
+    "version": "0.1.0",
+    "homepage_url": "",
+    "support_url": "",
+    "min_server_version": "12.0.0",
+    "server": {
+        "executables": {
+            "linux-amd64": "server/dist/plugin-linux-amd64",
+            "linux-arm64": "server/dist/plugin-linux-arm64"
+        }
+    },
+    "settings_schema": {
+        "header": "AI assistants connect to <Site URL>/plugins/com.scaleupconsulting.mcp/mcp and sign in as a Mattermost user, who approves each assistant on a consent page. Every tool sees only the teams, channels, direct messages and posts that user can see. Users review and disconnect assistants at <Site URL>/plugins/com.scaleupconsulting.mcp/connections or with /mcp.",
+        "footer": "",
+        "settings": [
+            {
+                "key": "EnableAccess",
+                "display_name": "Allow assistants to connect:",
+                "type": "bool",
+                "help_text": "When off, sign-in, token refresh and every tool call are refused, but existing connections are kept so turning it back on restores them.",
+                "default": true
+            },
+            {
+                "key": "EnableWriteTools",
+                "display_name": "Allow posting:",
+                "type": "bool",
+                "help_text": "When on, assistants a user approves for posting can post messages, reply in threads and add reactions as that user. Off by default: assistants can only read.",
+                "default": false
+            },
+            {
+                "key": "ToolsChannels",
+                "display_name": "Tools: teams and channels:",
+                "type": "bool",
+                "help_text": "list_teams and list_channels.",
+                "default": true
+            },
+            {
+                "key": "ToolsPosts",
+                "display_name": "Tools: read posts and threads:",
+                "type": "bool",
+                "help_text": "read_channel and read_thread.",
+                "default": true
+            },
+            {
+                "key": "ToolsSearch",
+                "display_name": "Tools: search:",
+                "type": "bool",
+                "help_text": "search_posts.",
+                "default": true
+            },
+            {
+                "key": "ToolsUnreads",
+                "display_name": "Tools: unreads and mentions:",
+                "type": "bool",
+                "help_text": "get_unreads.",
+                "default": true
+            },
+            {
+                "key": "ToolsUsers",
+                "display_name": "Tools: user lookup:",
+                "type": "bool",
+                "help_text": "get_me and find_users.",
+                "default": true
+            },
+            {
+                "key": "AccessTokenMinutes",
+                "display_name": "Access token lifetime (minutes):",
+                "type": "number",
+                "help_text": "How long an access token works before the assistant must refresh it. 5 to 1440.",
+                "default": 60
+            },
+            {
+                "key": "RefreshTokenDays",
+                "display_name": "Refresh token lifetime (days):",
+                "type": "number",
+                "help_text": "How long a connection stays signed in without being used. Each refresh issues a new refresh token and invalidates the old one. 1 to 365.",
+                "default": 30
+            }
+        ]
+    }
+}
