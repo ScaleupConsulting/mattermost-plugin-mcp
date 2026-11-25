@@ -85,7 +85,6 @@ func (p *Plugin) newRouter() http.Handler {
 	router.HandleFunc("/oauth/register", o.handleRegister).Methods(http.MethodPost)
 	router.HandleFunc("/oauth/token", o.handleToken).Methods(http.MethodPost)
 	router.HandleFunc("/oauth/revoke", o.handleRevoke).Methods(http.MethodPost)
-	router.PathPrefix("/").Methods(http.MethodOptions).HandlerFunc(preflight)
 	router.HandleFunc("/oauth/authorize", func(w http.ResponseWriter, r *http.Request) {
 		o.handleAuthorize(w, r, p.sessionCSRF(r))
 	}).Methods(http.MethodGet)
@@ -101,6 +100,8 @@ func (p *Plugin) newRouter() http.Handler {
 		r.Header.Del("Mattermost-User-Id")
 		mcpHandler.ServeHTTP(w, r)
 	}))
+	// Registered last: gorilla/mux answers 405 for a path an earlier method-specific route matched.
+	router.PathPrefix("/").Methods(http.MethodOptions).HandlerFunc(preflight)
 	return router
 }
 
