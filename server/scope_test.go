@@ -121,8 +121,10 @@ func TestUnknownScopeIsRefused(t *testing.T) {
 	h := newHarness(t)
 	clientID := h.registerPublic()
 	_, challenge := pkcePair()
-	q := url.Values{"response_type": {"code"}, "client_id": {clientID}, "redirect_uri": {testRedirect},
-		"code_challenge": {challenge}, "code_challenge_method": {"S256"}, "scope": {"mcp:read admin"}}
+	q := url.Values{
+		"response_type": {"code"}, "client_id": {clientID}, "redirect_uri": {testRedirect},
+		"code_challenge": {challenge}, "code_challenge_method": {"S256"}, "scope": {"mcp:read admin"},
+	}
 	rec := h.do(http.MethodGet, "/oauth/authorize?"+q.Encode(), nil, h.w.alice, nil)
 	require.Equal(t, http.StatusFound, rec.Code)
 	loc, _ := url.Parse(rec.Header().Get("Location"))
@@ -164,7 +166,7 @@ func TestWriteToolsRecheckScopeOnEachCall(t *testing.T) {
 	require.NoError(t, err)
 	session, err := mcp.NewClient(&mcp.Implementation{Name: "t"}, nil).Connect(ctx, ct, nil)
 	require.NoError(t, err)
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 	for name, args := range h.writeArgs() {
 		res, err := session.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
 		require.NoError(t, err)

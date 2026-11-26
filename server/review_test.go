@@ -1,6 +1,7 @@
 package main
 
 import (
+	"maps"
 	"net/http"
 	"net/url"
 	"strings"
@@ -18,8 +19,10 @@ func (h *harness) codeFlow() (clientID string, form url.Values) {
 	clientID = h.registerPublic()
 	verifier, challenge := pkcePair()
 	loc := h.authorize(clientID, challenge, "", h.w.alice)
-	return clientID, url.Values{"grant_type": {"authorization_code"}, "client_id": {clientID}, "code": {loc.Query().Get("code")},
-		"redirect_uri": {testRedirect}, "code_verifier": {verifier}}
+	return clientID, url.Values{
+		"grant_type": {"authorization_code"}, "client_id": {clientID}, "code": {loc.Query().Get("code")},
+		"redirect_uri": {testRedirect}, "code_verifier": {verifier},
+	}
 }
 
 func TestSpentCodeFromAnotherClientDoesNotRevoke(t *testing.T) {
@@ -31,9 +34,7 @@ func TestSpentCodeFromAnotherClientDoesNotRevoke(t *testing.T) {
 
 	other := h.registerPublic()
 	stolen := url.Values{}
-	for k, v := range form {
-		stolen[k] = v
-	}
+	maps.Copy(stolen, form)
 	stolen.Set("client_id", other)
 	code, out := h.token(stolen)
 	assert.Equal(t, http.StatusBadRequest, code)

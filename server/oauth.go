@@ -569,11 +569,11 @@ func (o *oauthServer) exchangeCode(w http.ResponseWriter, r *http.Request, clien
 		// code cannot be used by another registered client to disconnect the user.
 		if ac.ClientID == client.ClientID && ac.GrantID != "" {
 			// The tombstone catches a replay that lands before the first redemption has saved its grant.
-			if err := o.store.setJSON(keyRevoked+ac.GrantID, true, usedCodeTTL); err != nil {
-				o.api.LogError("Failed to record grant revocation after code replay", "err", err.Error())
+			if setErr := o.store.setJSON(keyRevoked+ac.GrantID, true, usedCodeTTL); setErr != nil {
+				o.api.LogError("Failed to record grant revocation after code replay", "err", setErr.Error())
 			}
-			if err := o.store.revokeGrant(ac.GrantID); err != nil {
-				o.api.LogError("Failed to revoke grant after code replay", "err", err.Error())
+			if revokeErr := o.store.revokeGrant(ac.GrantID); revokeErr != nil {
+				o.api.LogError("Failed to revoke grant after code replay", "err", revokeErr.Error())
 			}
 			o.api.LogWarn("Authorization code replayed; revoked the tokens it issued", "client_id", client.ClientID)
 		}
@@ -670,8 +670,8 @@ func (o *oauthServer) refresh(w http.ResponseWriter, r *http.Request, client *oa
 		return
 	}
 	if subtle.ConstantTimeCompare([]byte(g.RefreshHash), []byte(hash)) != 1 {
-		if err := o.store.revokeGrant(g.GrantID); err != nil {
-			o.api.LogError("Failed to revoke grant after refresh token reuse", "err", err.Error())
+		if revokeErr := o.store.revokeGrant(g.GrantID); revokeErr != nil {
+			o.api.LogError("Failed to revoke grant after refresh token reuse", "err", revokeErr.Error())
 		}
 		o.api.LogWarn("Superseded refresh token presented; revoked the connection", "client_id", client.ClientID, "user_id", g.UserID)
 		oauthError(w, http.StatusBadRequest, "invalid_grant", "refresh token already used")
@@ -698,8 +698,8 @@ func (o *oauthServer) refresh(w http.ResponseWriter, r *http.Request, client *oa
 		return
 	}
 	if user.LastPasswordUpdate != g.PasswordUpdatedAt {
-		if err := o.store.revokeGrant(g.GrantID); err != nil {
-			o.api.LogError("Failed to revoke grant after a password change", "err", err.Error())
+		if revokeErr := o.store.revokeGrant(g.GrantID); revokeErr != nil {
+			o.api.LogError("Failed to revoke grant after a password change", "err", revokeErr.Error())
 		}
 		oauthError(w, http.StatusBadRequest, "invalid_grant", "the password changed since this connection was approved")
 		return

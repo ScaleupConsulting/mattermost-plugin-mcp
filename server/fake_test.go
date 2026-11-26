@@ -98,7 +98,7 @@ func (f *fakeAPI) addChannel(team *model.Team, name string, typ model.ChannelTyp
 	if team != nil {
 		ch.TeamId = team.Id
 	}
-	if typ == model.ChannelTypeDirect {
+	if typ == model.ChannelTypeDirect && len(members) == 2 {
 		ch.Name = model.GetDMNameFromIds(members[0].Id, members[1].Id)
 	}
 	f.channels[ch.Id] = ch

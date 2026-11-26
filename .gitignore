@@ -1,6 +1,7 @@
 bin/
 dist/
 node_modules/
+webapp/node_modules
 server/dist/
 webapp/dist/
 webapp/src/manifest.ts

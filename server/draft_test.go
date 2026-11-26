@@ -132,6 +132,7 @@ func (s *sessionFake) CreateSession(in *model.Session) (*model.Session, *model.A
 	s.created = append(s.created, &c)
 	return &c, nil
 }
+
 func (s *sessionFake) RevokeSession(id string) *model.AppError {
 	s.revoked = append(s.revoked, id)
 	return nil
@@ -178,7 +179,7 @@ func TestRestDraftsCallsTheAPIAsTheUserAndRevokesTheSession(t *testing.T) {
 	for i, s := range sf.created {
 		assert.Equal(t, w.alice.Id, s.UserId)
 		assert.True(t, strings.EqualFold(tokens[i], "Bearer "+s.Token), "the call used the session created for it")
-		assert.Less(t, s.ExpiresAt-model.GetMillis(), int64(draftSessionTTL.Milliseconds())+1)
+		assert.Less(t, s.ExpiresAt-model.GetMillis(), draftSessionTTL.Milliseconds()+1)
 	}
 	assert.Len(t, sf.revoked, 3, "every session is revoked after its call")
 }

@@ -97,9 +97,11 @@ var hiddenField = regexp.MustCompile(`name="(request_id|csrf)" value="([^"]*)"`)
 
 // authorize runs the consent flow as user and returns the redirect URL the browser is sent to.
 func (h *harness) authorize(clientID, challenge, scope string, user *model.User) *url.URL {
-	q := url.Values{"response_type": {"code"}, "client_id": {clientID}, "redirect_uri": {testRedirect},
+	q := url.Values{
+		"response_type": {"code"}, "client_id": {clientID}, "redirect_uri": {testRedirect},
 		"code_challenge": {challenge}, "code_challenge_method": {"S256"}, "state": {"st-1"},
-		"resource": {"https://chat.example.com/plugins/" + pluginID + "/mcp"}}
+		"resource": {"https://chat.example.com/plugins/" + pluginID + "/mcp"},
+	}
 	if scope != "" {
 		q.Set("scope", scope)
 	}
@@ -133,8 +135,10 @@ func (h *harness) connect(scope string) (string, map[string]any) {
 	clientID := h.registerPublic()
 	verifier, challenge := pkcePair()
 	loc := h.authorize(clientID, challenge, scope, h.w.alice)
-	code, tok := h.token(url.Values{"grant_type": {"authorization_code"}, "client_id": {clientID}, "code": {loc.Query().Get("code")},
-		"redirect_uri": {testRedirect}, "code_verifier": {verifier}})
+	code, tok := h.token(url.Values{
+		"grant_type": {"authorization_code"}, "client_id": {clientID}, "code": {loc.Query().Get("code")},
+		"redirect_uri": {testRedirect}, "code_verifier": {verifier},
+	})
 	require.Equal(h.t, http.StatusOK, code, tok)
 	return clientID, tok
 }
@@ -244,8 +248,10 @@ func TestPKCEFailure(t *testing.T) {
 	_, challenge := pkcePair()
 	loc := h.authorize(clientID, challenge, "", h.w.alice)
 	wrongVerifier, _ := pkcePair()
-	code, out := h.token(url.Values{"grant_type": {"authorization_code"}, "client_id": {clientID}, "code": {loc.Query().Get("code")},
-		"redirect_uri": {testRedirect}, "code_verifier": {wrongVerifier}})
+	code, out := h.token(url.Values{
+		"grant_type": {"authorization_code"}, "client_id": {clientID}, "code": {loc.Query().Get("code")},
+		"redirect_uri": {testRedirect}, "code_verifier": {wrongVerifier},
+	})
 	assert.Equal(t, http.StatusBadRequest, code)
 	assert.Equal(t, "invalid_grant", out["error"])
 }
@@ -253,8 +259,10 @@ func TestPKCEFailure(t *testing.T) {
 func TestPlainPKCEIsRefused(t *testing.T) {
 	h := newHarness(t)
 	clientID := h.registerPublic()
-	q := url.Values{"response_type": {"code"}, "client_id": {clientID}, "redirect_uri": {testRedirect},
-		"code_challenge": {"plain-challenge-plain-challenge-plain-chall"}, "code_challenge_method": {"plain"}, "state": {"s"}}
+	q := url.Values{
+		"response_type": {"code"}, "client_id": {clientID}, "redirect_uri": {testRedirect},
+		"code_challenge": {"plain-challenge-plain-challenge-plain-chall"}, "code_challenge_method": {"plain"}, "state": {"s"},
+	}
 	rec := h.do(http.MethodGet, "/oauth/authorize?"+q.Encode(), nil, h.w.alice, nil)
 	require.Equal(t, http.StatusFound, rec.Code)
 	assert.Contains(t, rec.Header().Get("Location"), "error=invalid_request")
@@ -268,8 +276,10 @@ func TestWrongRedirectURI(t *testing.T) {
 	h := newHarness(t)
 	clientID := h.registerPublic()
 	verifier, challenge := pkcePair()
-	q := url.Values{"response_type": {"code"}, "client_id": {clientID}, "redirect_uri": {"https://evil.example/cb"},
-		"code_challenge": {challenge}, "code_challenge_method": {"S256"}}
+	q := url.Values{
+		"response_type": {"code"}, "client_id": {clientID}, "redirect_uri": {"https://evil.example/cb"},
+		"code_challenge": {challenge}, "code_challenge_method": {"S256"},
+	}
 	rec := h.do(http.MethodGet, "/oauth/authorize?"+q.Encode(), nil, h.w.alice, nil)
 	assert.Equal(t, http.StatusBadRequest, rec.Code, "an unregistered redirect is shown an error, never redirected to")
 	assert.Empty(t, rec.Header().Get("Location"))
@@ -279,8 +289,10 @@ func TestWrongRedirectURI(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rec.Code, "redirect URIs match exactly, not by prefix")
 
 	loc := h.authorize(clientID, challenge, "", h.w.alice)
-	code, out := h.token(url.Values{"grant_type": {"authorization_code"}, "client_id": {clientID}, "code": {loc.Query().Get("code")},
-		"redirect_uri": {"http://localhost:9999/callback"}, "code_verifier": {verifier}})
+	code, out := h.token(url.Values{
+		"grant_type": {"authorization_code"}, "client_id": {clientID}, "code": {loc.Query().Get("code")},
+		"redirect_uri": {"http://localhost:9999/callback"}, "code_verifier": {verifier},
+	})
 	assert.Equal(t, http.StatusBadRequest, code)
 	assert.Equal(t, "invalid_grant", out["error"])
 
@@ -295,8 +307,10 @@ func TestReplayedCodeRevokesItsTokens(t *testing.T) {
 	loc := h.authorize(clientID, challenge, "", h.w.alice)
 	assert.Equal(t, "st-1", loc.Query().Get("state"))
 	assert.Equal(t, "https://chat.example.com/plugins/com.scaleupconsulting.mcp", loc.Query().Get("iss"))
-	form := url.Values{"grant_type": {"authorization_code"}, "client_id": {clientID}, "code": {loc.Query().Get("code")},
-		"redirect_uri": {testRedirect}, "code_verifier": {verifier}}
+	form := url.Values{
+		"grant_type": {"authorization_code"}, "client_id": {clientID}, "code": {loc.Query().Get("code")},
+		"redirect_uri": {testRedirect}, "code_verifier": {verifier},
+	}
 	code, tok := h.token(form)
 	require.Equal(t, http.StatusOK, code)
 	access := tok["access_token"].(string)
@@ -330,8 +344,10 @@ func TestExpiredCode(t *testing.T) {
 	verifier, challenge := pkcePair()
 	loc := h.authorize(clientID, challenge, "", h.w.alice)
 	h.w.api.advance(3 * time.Minute)
-	code, out := h.token(url.Values{"grant_type": {"authorization_code"}, "client_id": {clientID}, "code": {loc.Query().Get("code")},
-		"redirect_uri": {testRedirect}, "code_verifier": {verifier}})
+	code, out := h.token(url.Values{
+		"grant_type": {"authorization_code"}, "client_id": {clientID}, "code": {loc.Query().Get("code")},
+		"redirect_uri": {testRedirect}, "code_verifier": {verifier},
+	})
 	assert.Equal(t, http.StatusBadRequest, code)
 	assert.Equal(t, "invalid_grant", out["error"])
 }
@@ -391,8 +407,10 @@ func TestConsentCSRF(t *testing.T) {
 	h := newHarness(t)
 	clientID := h.registerPublic()
 	_, challenge := pkcePair()
-	q := url.Values{"response_type": {"code"}, "client_id": {clientID}, "redirect_uri": {testRedirect},
-		"code_challenge": {challenge}, "code_challenge_method": {"S256"}, "state": {"s"}}
+	q := url.Values{
+		"response_type": {"code"}, "client_id": {clientID}, "redirect_uri": {testRedirect},
+		"code_challenge": {challenge}, "code_challenge_method": {"S256"}, "state": {"s"},
+	}
 	rec := h.do(http.MethodGet, "/oauth/authorize?"+q.Encode(), nil, h.w.alice, nil)
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "DENY", rec.Header().Get("X-Frame-Options"))
@@ -411,8 +429,10 @@ func TestDenyRedirectsWithAccessDenied(t *testing.T) {
 	h := newHarness(t)
 	clientID := h.registerPublic()
 	_, challenge := pkcePair()
-	q := url.Values{"response_type": {"code"}, "client_id": {clientID}, "redirect_uri": {testRedirect},
-		"code_challenge": {challenge}, "code_challenge_method": {"S256"}, "state": {"s"}}
+	q := url.Values{
+		"response_type": {"code"}, "client_id": {clientID}, "redirect_uri": {testRedirect},
+		"code_challenge": {challenge}, "code_challenge_method": {"S256"}, "state": {"s"},
+	}
 	rec := h.do(http.MethodGet, "/oauth/authorize?"+q.Encode(), nil, h.w.alice, nil)
 	reqID := hiddenField.FindStringSubmatch(rec.Body.String())[2]
 	rec = h.postForm("/oauth/authorize", url.Values{"request_id": {reqID}, "csrf": {"csrf-alice"}, "decision": {"deny"}}, h.w.alice)
@@ -424,8 +444,10 @@ func TestNotSignedInRedirectsToLogin(t *testing.T) {
 	h := newHarness(t)
 	clientID := h.registerPublic()
 	_, challenge := pkcePair()
-	q := url.Values{"response_type": {"code"}, "client_id": {clientID}, "redirect_uri": {testRedirect},
-		"code_challenge": {challenge}, "code_challenge_method": {"S256"}}
+	q := url.Values{
+		"response_type": {"code"}, "client_id": {clientID}, "redirect_uri": {testRedirect},
+		"code_challenge": {challenge}, "code_challenge_method": {"S256"},
+	}
 	rec := h.do(http.MethodGet, "/oauth/authorize?"+q.Encode(), nil, nil, nil)
 	assert.Equal(t, http.StatusFound, rec.Code)
 	loc, err := url.Parse(rec.Header().Get("Location"))
@@ -438,8 +460,10 @@ func TestResourceMustMatch(t *testing.T) {
 	h := newHarness(t)
 	clientID := h.registerPublic()
 	_, challenge := pkcePair()
-	q := url.Values{"response_type": {"code"}, "client_id": {clientID}, "redirect_uri": {testRedirect},
-		"code_challenge": {challenge}, "code_challenge_method": {"S256"}, "resource": {"https://other.example/mcp"}}
+	q := url.Values{
+		"response_type": {"code"}, "client_id": {clientID}, "redirect_uri": {testRedirect},
+		"code_challenge": {challenge}, "code_challenge_method": {"S256"}, "resource": {"https://other.example/mcp"},
+	}
 	rec := h.do(http.MethodGet, "/oauth/authorize?"+q.Encode(), nil, h.w.alice, nil)
 	assert.Contains(t, rec.Header().Get("Location"), "error=invalid_target")
 }
@@ -489,8 +513,10 @@ func TestReconnectReplacesOldConnection(t *testing.T) {
 	clientID, first := h.connect("")
 	verifier, challenge := pkcePair()
 	loc := h.authorize(clientID, challenge, "", h.w.alice)
-	code, _ := h.token(url.Values{"grant_type": {"authorization_code"}, "client_id": {clientID}, "code": {loc.Query().Get("code")},
-		"redirect_uri": {testRedirect}, "code_verifier": {verifier}})
+	code, _ := h.token(url.Values{
+		"grant_type": {"authorization_code"}, "client_id": {clientID}, "code": {loc.Query().Get("code")},
+		"redirect_uri": {testRedirect}, "code_verifier": {verifier},
+	})
 	require.Equal(t, http.StatusOK, code)
 	grants, err := h.p.oauth.store.listGrants(h.w.alice.Id)
 	require.NoError(t, err)
@@ -511,8 +537,10 @@ func TestKVHoldsNoRawSecrets(t *testing.T) {
 
 // consentPage opens the consent page for alice with the given requested scope.
 func (h *harness) consentPage(clientID, challenge, scope string) *httptest.ResponseRecorder {
-	q := url.Values{"response_type": {"code"}, "client_id": {clientID}, "redirect_uri": {testRedirect},
-		"code_challenge": {challenge}, "code_challenge_method": {"S256"}, "state": {"st-1"}}
+	q := url.Values{
+		"response_type": {"code"}, "client_id": {clientID}, "redirect_uri": {testRedirect},
+		"code_challenge": {challenge}, "code_challenge_method": {"S256"}, "state": {"st-1"},
+	}
 	if scope != "" {
 		q.Set("scope", scope)
 	}
