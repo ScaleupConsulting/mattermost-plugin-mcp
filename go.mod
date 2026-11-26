@@ -7,6 +7,7 @@ require (
 	github.com/mattermost/mattermost/server/public v0.6.1
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/pkg/errors v0.9.1
+	github.com/stretchr/testify v1.12.1
 )
 
 require (
@@ -42,7 +43,6 @@ require (
 	github.com/russellhaering/goxmldsig v1.6.1 // indirect
 	github.com/segmentio/asm v1.1.3 // indirect
 	github.com/segmentio/encoding v0.5.4 // indirect
-	github.com/stretchr/testify v1.12.1 // indirect
 	github.com/tinylib/msgp v1.6.5 // indirect
 	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
