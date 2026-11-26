@@ -13,7 +13,7 @@
         }
     },
     "settings_schema": {
-        "header": "AI assistants connect to <Site URL>/plugins/com.scaleupconsulting.mcp/mcp and sign in as a Mattermost user, who approves each assistant on a consent page and chooses Read only or Read and write for it. Every tool sees only the teams, channels, direct messages and posts that user can see. Users review and disconnect assistants at <Site URL>/plugins/com.scaleupconsulting.mcp/connections or with /mcp.",
+        "header": "AI assistants connect to <Site URL>/plugins/com.scaleupconsulting.mcp/mcp and sign in as a Mattermost user, who approves each assistant on a consent page and chooses Read only or Read and write for it. Every tool sees only the teams, channels, direct messages and posts that user can see. Users find the connect steps, and review and disconnect their assistants, from the app bar icon, at <Site URL>/plugins/com.scaleupconsulting.mcp/connections, or with /mcp help and /mcp.",
         "footer": "",
         "settings": [
             {

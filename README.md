@@ -4,7 +4,7 @@ A remote MCP server inside Mattermost, so Claude (a claude.ai custom connector, 
 
 ## Connecting
 
-Add `<Site URL>/plugins/com.scaleupconsulting.mcp/mcp` as a remote MCP server (Streamable HTTP). The client registers itself, opens a browser, and the user approves it on a consent page while signed in to Mattermost, choosing **Read only** or **Read and write** for that connection. Users list their assistants, with the access each was granted, and disconnect them at `<Site URL>/plugins/com.scaleupconsulting.mcp/connections` or with `/mcp`, `/mcp disconnect <number>` and `/mcp disconnect all`.
+Add `<Site URL>/plugins/com.scaleupconsulting.mcp/mcp` as a remote MCP server (Streamable HTTP). The client registers itself, opens a browser, and the user approves it on a consent page while signed in to Mattermost, choosing **Read only** or **Read and write** for that connection. Inside Mattermost, users find these steps for claude.ai, Claude Desktop, Claude Code and other clients with `/mcp help` (and with `/mcp` until something is connected), or on the connect page that the app bar icon opens, `<Site URL>/plugins/com.scaleupconsulting.mcp/connections`. The steps follow the admin settings: with connecting turned off they say so, and with write access off they mention only Read only. The same page lists their assistants, with the access each was granted, and disconnects them, as do `/mcp`, `/mcp disconnect <number>` and `/mcp disconnect all`.
 
 ## Tools
 
@@ -29,7 +29,7 @@ Each connection holds OAuth scopes: `mcp:read` always, and `mcp:write` only when
 - The plugin is its own OAuth 2.1 authorization server: dynamic client registration (RFC 7591), authorization code with PKCE S256 only, exact redirect URI matching (https, or http on loopback), `state`, the `iss` response parameter (RFC 9207), and RFC 8707 resource indicators. Tokens are bound to the MCP endpoint's URL.
 - Access tokens last 60 minutes and refresh tokens 30 days by default. Each refresh issues a new refresh token; presenting an old one, or the same client redeeming an authorization code twice, revokes the whole connection. Changing the Mattermost password ends every connection, as it ends the user's sessions. Revocation follows RFC 7009.
 - Codes and tokens are stored in the plugin KV store only as SHA-256 hashes. Unapproved client registrations expire after a day, and registrations are capped per hour, server-wide and per client address (`X-Real-IP` from the proxy).
-- The MCP endpoint accepts only this plugin's tokens, never a Mattermost session or cookie. The consent and connections pages use the Mattermost session, refuse to be framed, and check the session's CSRF token on every form.
+- The MCP endpoint accepts only this plugin's tokens, never a Mattermost session or cookie. The consent and connect pages use the Mattermost session, refuse to be framed, and check the session's CSRF token on every form. Their CSP allows one script, the connect page's Copy button, by hash.
 
 ## Settings
 
@@ -54,7 +54,7 @@ location ^~ /.well-known/oauth-protected-resource/plugins/com.scaleupconsulting.
 
 ## Web app part
 
-Mattermost's login page returns to its `redirect_to` with a client-side route change, which cannot show a server page. The plugin's small web app script reloads the page when the app routes onto a plugin path, so a signed-out user lands on the consent page after logging in.
+Mattermost's login page returns to its `redirect_to` with a client-side route change, which cannot show a server page. The plugin's small web app script reloads the page when the app routes onto a plugin path, so a signed-out user lands on the consent page after logging in. It also adds the "Connect an AI assistant" app bar icon, which opens the connect page in a new tab.
 
 ## Building and testing
 
