@@ -25,10 +25,10 @@ Each connection holds OAuth scopes: `mcp:read` always, and `mcp:write` only when
 
 ## Security model
 
-- The plugin API runs with system privileges, so every tool checks the user's own access first: channel membership, membership of the channel's team, and the channel permission (read content, create post, add reaction). Membership is required even where a role would allow more, so a system admin's assistant cannot read other people's private channels or direct messages. A channel or post that does not exist and one the user cannot see give the same answer. Search results and every listing are filtered the same way.
+- The plugin API runs with system privileges, so every tool checks the user's own access first: channel membership, membership of the channel's team, and the channel permission (read content, create post, add reaction). Membership is required even where a role would allow more, so a system admin's assistant cannot read other people's private channels or direct messages. A channel or post that does not exist and one the user cannot see give the same answer. Search results and every listing are filtered the same way. `find_users` shows full names only when Show full name is on in the privacy settings.
 - The plugin is its own OAuth 2.1 authorization server: dynamic client registration (RFC 7591), authorization code with PKCE S256 only, exact redirect URI matching (https, or http on loopback), `state`, the `iss` response parameter (RFC 9207), and RFC 8707 resource indicators. Tokens are bound to the MCP endpoint's URL.
-- Access tokens last 60 minutes and refresh tokens 30 days by default. Each refresh issues a new refresh token; presenting an old one, or redeeming an authorization code twice, revokes the whole connection. Revocation follows RFC 7009.
-- Codes and tokens are stored in the plugin KV store only as SHA-256 hashes. Unapproved client registrations expire after a day, and registrations are capped per hour.
+- Access tokens last 60 minutes and refresh tokens 30 days by default. Each refresh issues a new refresh token; presenting an old one, or the same client redeeming an authorization code twice, revokes the whole connection. Changing the Mattermost password ends every connection, as it ends the user's sessions. Revocation follows RFC 7009.
+- Codes and tokens are stored in the plugin KV store only as SHA-256 hashes. Unapproved client registrations expire after a day, and registrations are capped per hour, server-wide and per client address (`X-Real-IP` from the proxy).
 - The MCP endpoint accepts only this plugin's tokens, never a Mattermost session or cookie. The consent and connections pages use the Mattermost session, refuse to be framed, and check the session's CSRF token on every form.
 
 ## Settings

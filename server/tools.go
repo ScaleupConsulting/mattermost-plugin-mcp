@@ -587,6 +587,12 @@ func (t *toolset) FindUsers(term string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// Full names are shown only where the server shows them to every user. The plugin API search
+	// (12.0) does not match full names, so the search itself reveals none.
+	showFullName := true
+	if cfg := t.api.GetConfig(); cfg != nil && cfg.PrivacySettings.ShowFullName != nil {
+		showFullName = *cfg.PrivacySettings.ShowFullName
+	}
 	found := map[string]*model.User{}
 	for _, team := range teams {
 		users, appErr := t.api.SearchUsers(&model.UserSearch{Term: term, TeamId: team.Id, Limit: maxUserResults})
@@ -616,7 +622,7 @@ func (t *toolset) FindUsers(term string) (string, error) {
 	fmt.Fprintf(&b, "%d user(s) in your teams matching %q:\n", len(users), term)
 	for _, u := range users {
 		fmt.Fprintf(&b, "- @%s", u.Username)
-		if name := strings.TrimSpace(u.GetFullName()); name != "" {
+		if name := strings.TrimSpace(u.GetFullName()); name != "" && showFullName {
 			fmt.Fprintf(&b, " %s", name)
 		}
 		if u.Position != "" {

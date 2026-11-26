@@ -33,7 +33,12 @@ type fakeAPI struct {
 	denied map[string]bool
 
 	// drafts holds saved drafts by "user|channel|root".
-	drafts    map[string]*model.Draft
+	drafts map[string]*model.Draft
+	// configure, when set, adjusts every config GetConfig returns.
+	configure func(c *model.Config)
+	// afterSet, when set, runs after each successful KV write, outside the lock, to stage races.
+	afterSet func(key string, value []byte)
+
 	created   []*model.Post
 	reactions []*model.Reaction
 	clock     time.Time
@@ -118,6 +123,9 @@ func (f *fakeAPI) GetConfig() *model.Config {
 	c := &model.Config{}
 	c.SetDefaults()
 	c.ServiceSettings.SiteURL = model.NewPointer(f.siteURL)
+	if f.configure != nil {
+		f.configure(c)
+	}
 	return c
 }
 
@@ -310,6 +318,14 @@ func (f *fakeAPI) KVGet(key string) ([]byte, *model.AppError) {
 // KVSetWithOptions follows the server: atomic with a nil old value means insert-if-absent, and a
 // nil new value deletes.
 func (f *fakeAPI) KVSetWithOptions(key string, value []byte, opts model.PluginKVSetOptions) (bool, *model.AppError) {
+	ok, appErr := f.kvSet(key, value, opts)
+	if ok && f.afterSet != nil {
+		f.afterSet(key, value)
+	}
+	return ok, appErr
+}
+
+func (f *fakeAPI) kvSet(key string, value []byte, opts model.PluginKVSetOptions) (bool, *model.AppError) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	e, exists := f.kv[key]
@@ -351,10 +367,7 @@ func (f *fakeAPI) LogError(string, ...any) {}
 func (f *fakeAPI) UpsertDraft(userID string, d *model.Draft) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	c := *d
-	c.UserId = userID
-	c.UpdateAt = f.clock.UnixMilli()
-	f.drafts[userID+"|"+d.ChannelId+"|"+d.RootId] = &c
+	f.drafts[userID+"|"+d.ChannelId+"|"+d.RootId] = &model.Draft{UserId: userID, ChannelId: d.ChannelId, RootId: d.RootId, Message: d.Message, UpdateAt: f.clock.UnixMilli()}
 	return nil
 }
 

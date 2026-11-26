@@ -32,6 +32,8 @@ const (
 
 	// registrationsPerHour caps anonymous client registrations across the whole server.
 	registrationsPerHour = 200
+	// registrationsPerIPPerHour caps them per client address, so one source cannot use up the server cap.
+	registrationsPerIPPerHour = 20
 )
 
 // oauthServer is the plugin's own OAuth 2.1 authorization server for the MCP endpoint.
@@ -45,6 +47,7 @@ type oauthServer struct {
 	regLock    sync.Mutex
 	regWindow  time.Time
 	regInCycle int
+	regByIP    map[string]int
 }
 
 // base is the plugin's public URL, which is also the OAuth issuer.
@@ -102,19 +105,33 @@ func (o *oauthServer) handleAuthServerMetadata(w http.ResponseWriter, _ *http.Re
 	})
 }
 
-// allowRegistration applies the server-wide hourly cap on anonymous registrations.
-func (o *oauthServer) allowRegistration() bool {
+// allowRegistration applies the hourly caps on anonymous registrations, per client address and
+// server-wide.
+func (o *oauthServer) allowRegistration(ip string) bool {
 	o.regLock.Lock()
 	defer o.regLock.Unlock()
 	now := o.now()
-	if now.Sub(o.regWindow) > time.Hour {
-		o.regWindow, o.regInCycle = now, 0
+	if now.Sub(o.regWindow) > time.Hour || o.regByIP == nil {
+		o.regWindow, o.regInCycle, o.regByIP = now, 0, map[string]int{}
 	}
-	if o.regInCycle >= registrationsPerHour {
+	if o.regInCycle >= registrationsPerHour || o.regByIP[ip] >= registrationsPerIPPerHour {
 		return false
 	}
 	o.regInCycle++
+	o.regByIP[ip]++
 	return true
+}
+
+// clientIP is the caller's address: X-Real-IP, which the reverse proxy in front of Mattermost
+// overwrites with the address it saw, else the connection's remote address.
+func clientIP(r *http.Request) string {
+	if ip := net.ParseIP(strings.TrimSpace(r.Header.Get("X-Real-IP"))); ip != nil {
+		return ip.String()
+	}
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return host
+	}
+	return r.RemoteAddr
 }
 
 // registrationRequest is the subset of RFC 7591 client metadata this server reads.
@@ -176,7 +193,7 @@ func (o *oauthServer) handleRegister(w http.ResponseWriter, r *http.Request) {
 	if r := []rune(name); len(r) > maxClientNameRunes {
 		name = string(r[:maxClientNameRunes])
 	}
-	if !o.allowRegistration() {
+	if !o.allowRegistration(clientIP(r)) {
 		oauthError(w, http.StatusTooManyRequests, "temporarily_unavailable", "too many registrations, try again later")
 		return
 	}
@@ -548,12 +565,18 @@ func (o *oauthServer) exchangeCode(w http.ResponseWriter, r *http.Request, clien
 		return
 	}
 	if ac.Used {
-		if ac.GrantID != "" {
+		// Only the client the code was issued to can trigger the replay revocation, so a leaked spent
+		// code cannot be used by another registered client to disconnect the user.
+		if ac.ClientID == client.ClientID && ac.GrantID != "" {
+			// The tombstone catches a replay that lands before the first redemption has saved its grant.
+			if err := o.store.setJSON(keyRevoked+ac.GrantID, true, usedCodeTTL); err != nil {
+				o.api.LogError("Failed to record grant revocation after code replay", "err", err.Error())
+			}
 			if err := o.store.revokeGrant(ac.GrantID); err != nil {
 				o.api.LogError("Failed to revoke grant after code replay", "err", err.Error())
 			}
+			o.api.LogWarn("Authorization code replayed; revoked the tokens it issued", "client_id", client.ClientID)
 		}
-		o.api.LogWarn("Authorization code replayed; revoked the tokens it issued", "client_id", client.ClientID)
 		oauthError(w, http.StatusBadRequest, "invalid_grant", "code already used")
 		return
 	}
@@ -573,13 +596,14 @@ func (o *oauthServer) exchangeCode(w http.ResponseWriter, r *http.Request, clien
 	}
 
 	g := &grant{
-		GrantID:    model.NewId(),
-		UserID:     ac.UserID,
-		ClientID:   client.ClientID,
-		ClientName: client.ClientName,
-		Scope:      ac.Scope,
-		Resource:   ac.Resource,
-		CreatedAt:  o.now().UnixMilli(),
+		GrantID:           model.NewId(),
+		UserID:            ac.UserID,
+		ClientID:          client.ClientID,
+		ClientName:        client.ClientName,
+		Scope:             ac.Scope,
+		Resource:          ac.Resource,
+		CreatedAt:         o.now().UnixMilli(),
+		PasswordUpdatedAt: user.LastPasswordUpdate,
 	}
 	// Mark the code used first, so two concurrent redemptions cannot both succeed.
 	used := ac
@@ -599,6 +623,14 @@ func (o *oauthServer) exchangeCode(w http.ResponseWriter, r *http.Request, clien
 	if err != nil {
 		o.api.LogError("Failed to issue tokens", "err", err.Error())
 		oauthError(w, http.StatusInternalServerError, "server_error", "")
+		return
+	}
+	var revoked bool
+	if _, err := o.store.getJSON(keyRevoked+g.GrantID, &revoked); err == nil {
+		if err := o.store.revokeGrant(g.GrantID); err != nil {
+			o.api.LogError("Failed to revoke grant after code replay", "err", err.Error())
+		}
+		oauthError(w, http.StatusBadRequest, "invalid_grant", "code already used")
 		return
 	}
 	writeTokenResponse(w, pair, g.Scope)
@@ -663,6 +695,13 @@ func (o *oauthServer) refresh(w http.ResponseWriter, r *http.Request, client *oa
 	user, appErr := o.api.GetUser(g.UserID)
 	if appErr != nil || user.DeleteAt != 0 {
 		oauthError(w, http.StatusBadRequest, "invalid_grant", "user is not active")
+		return
+	}
+	if user.LastPasswordUpdate != g.PasswordUpdatedAt {
+		if err := o.store.revokeGrant(g.GrantID); err != nil {
+			o.api.LogError("Failed to revoke grant after a password change", "err", err.Error())
+		}
+		oauthError(w, http.StatusBadRequest, "invalid_grant", "the password changed since this connection was approved")
 		return
 	}
 	next := *g

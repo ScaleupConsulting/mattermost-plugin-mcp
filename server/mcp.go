@@ -25,7 +25,8 @@ type identity struct {
 }
 
 // verifyToken resolves a bearer token to its user. It accepts only unexpired access tokens issued by
-// this plugin for this resource whose grant has not been revoked and whose user is still active.
+// this plugin for this resource whose grant has not been revoked, whose user is still active and has
+// not changed their password since approving it.
 // Mattermost session tokens and cookies are never accepted here.
 func (o *oauthServer) verifyToken(_ context.Context, token string, _ *http.Request) (*auth.TokenInfo, error) {
 	if !o.config().EnableAccess {
@@ -42,7 +43,7 @@ func (o *oauthServer) verifyToken(_ context.Context, token string, _ *http.Reque
 		return nil, auth.ErrInvalidToken
 	}
 	user, appErr := o.api.GetUser(rec.UserID)
-	if appErr != nil || user.DeleteAt != 0 {
+	if appErr != nil || user.DeleteAt != 0 || user.LastPasswordUpdate != g.PasswordUpdatedAt {
 		return nil, auth.ErrInvalidToken
 	}
 	return &auth.TokenInfo{

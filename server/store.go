@@ -22,6 +22,7 @@ const (
 	keyRefresh   = "rt:" // rt:<sha256(token)> -> tokenRecord
 	keyGrant     = "g:"  // g:<grant id> -> grant, one connected client for one user
 	keyUserGrant = "ug:" // ug:<user id> -> []string of grant ids
+	keyRevoked   = "rg:" // rg:<grant id> -> true, a grant revoked by a code replay, possibly before it was saved
 )
 
 // oauthClient is a dynamically registered client (RFC 7591).
@@ -68,6 +69,9 @@ type grant struct {
 	RefreshedAt int64  `json:"refreshed_at"`
 	// RefreshHash is the hash of the only refresh token that may be redeemed next.
 	RefreshHash string `json:"refresh_hash"`
+	// PasswordUpdatedAt is the user's LastPasswordUpdate at approval. A password change ends the grant,
+	// as it ends the user's Mattermost sessions.
+	PasswordUpdatedAt int64 `json:"password_updated_at"`
 }
 
 // tokenRecord is what an access or refresh token hash points to.
