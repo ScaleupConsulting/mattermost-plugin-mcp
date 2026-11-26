@@ -33,10 +33,11 @@ type harness struct {
 
 func newHarness(t *testing.T) *harness {
 	w := newWorld()
-	cfg := &configuration{EnableAccess: true, ToolsChannels: true, ToolsPosts: true, ToolsSearch: true, ToolsUnreads: true, ToolsUsers: true, AccessTokenMinutes: 60, RefreshTokenDays: 30}
+	cfg := &configuration{EnableAccess: true, ToolsChannels: true, ToolsPosts: true, ToolsSearch: true, ToolsUnreads: true, ToolsUsers: true, ToolsDrafts: true, AccessTokenMinutes: 60, RefreshTokenDays: 30}
 	p := &Plugin{}
 	p.config.set(cfg)
 	p.setup(w.api, w.api.now)
+	p.drafts = w.api
 	for _, u := range []*model.User{w.alice, w.bob} {
 		w.api.sessions["sess-"+u.Username] = &model.Session{Id: "sess-" + u.Username, UserId: u.Id, Props: model.StringMap{"csrf": "csrf-" + u.Username}}
 	}

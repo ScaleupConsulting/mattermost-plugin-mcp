@@ -17,6 +17,7 @@ type configuration struct {
 	ToolsSearch        bool
 	ToolsUnreads       bool
 	ToolsUsers         bool
+	ToolsDrafts        bool
 	AccessTokenMinutes int
 	RefreshTokenDays   int
 }

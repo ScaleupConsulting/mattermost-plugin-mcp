@@ -32,6 +32,8 @@ type fakeAPI struct {
 	// denied lists "user|channel|permission" triples HasPermissionToChannel refuses.
 	denied map[string]bool
 
+	// drafts holds saved drafts by "user|channel|root".
+	drafts    map[string]*model.Draft
 	created   []*model.Post
 	reactions []*model.Reaction
 	clock     time.Time
@@ -54,6 +56,7 @@ func newFakeAPI() *fakeAPI {
 		sessions:    map[string]*model.Session{},
 		kv:          map[string]kvEntry{},
 		denied:      map[string]bool{},
+		drafts:      map[string]*model.Draft{},
 		// The MCP SDK checks token expiry against the real clock, so the fake clock starts at real time.
 		clock: time.Now().UTC().Truncate(time.Second),
 	}
@@ -342,3 +345,35 @@ func (f *fakeAPI) KVDelete(key string) *model.AppError {
 
 func (f *fakeAPI) LogWarn(string, ...any)  {}
 func (f *fakeAPI) LogError(string, ...any) {}
+
+// UpsertDraft stores a draft without any access check, like the server does for any channel the
+// session may post in, so the toolset's own checks are what keeps drafts out of forbidden places.
+func (f *fakeAPI) UpsertDraft(userID string, d *model.Draft) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	c := *d
+	c.UserId = userID
+	c.UpdateAt = f.clock.UnixMilli()
+	f.drafts[userID+"|"+d.ChannelId+"|"+d.RootId] = &c
+	return nil
+}
+
+// GetDrafts returns every draft of the user, ignoring the team, so leaks would show.
+func (f *fakeAPI) GetDrafts(userID, _ string) ([]*model.Draft, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []*model.Draft
+	for _, d := range f.drafts {
+		if d.UserId == userID {
+			out = append(out, d)
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeAPI) DeleteDraft(userID, channelID, rootID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.drafts, userID+"|"+channelID+"|"+rootID)
+	return nil
+}

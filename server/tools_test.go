@@ -53,7 +53,9 @@ func newWorld() *world {
 // a system admin, so only the plugin's own membership checks stand between alice and the data.
 func (w *world) asAlice() *toolset {
 	w.api.permissive = true
-	return newToolset(w.api, w.alice.Id, w.api.siteURL, "test client")
+	ts := newToolset(w.api, w.alice.Id, w.api.siteURL, "test client")
+	ts.drafts = w.api
+	return ts
 }
 
 // forbidden are the channels alice must never reach, by every way of naming them.

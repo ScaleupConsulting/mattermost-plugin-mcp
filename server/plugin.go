@@ -24,6 +24,7 @@ type Plugin struct {
 	config configStore
 	mm     mmAPI
 	oauth  *oauthServer
+	drafts draftAPI
 
 	routerOnce sync.Once
 	router     http.Handler
@@ -35,6 +36,7 @@ func (p *Plugin) OnActivate() error {
 		return err
 	}
 	p.setup(p.API, time.Now)
+	p.drafts = newRestDrafts(p.API)
 	if p.siteURL() == "" {
 		return errors.New("set System Console > Environment > Web Server > Site URL: OAuth and permalinks need it")
 	}

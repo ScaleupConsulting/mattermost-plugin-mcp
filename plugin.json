@@ -66,6 +66,13 @@
                 "default": true
             },
             {
+                "key": "ToolsDrafts",
+                "display_name": "Tools: drafts:",
+                "type": "bool",
+                "help_text": "save_draft, list_drafts and delete_draft: the user's own Mattermost drafts, which only the user can send. They count as reading, so Read only connections get them. They need Allow message drafts to sync with the server.",
+                "default": true
+            },
+            {
                 "key": "AccessTokenMinutes",
                 "display_name": "Access token lifetime (minutes):",
                 "type": "number",

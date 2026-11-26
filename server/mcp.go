@@ -14,7 +14,8 @@ import (
 
 const serverInstructions = `Tools for one Mattermost user's workspace. Every tool sees only what that user can see in Mattermost.
 Start with list_channels or get_unreads to find channel ids. Channels can be given by id or team-name/channel-name.
-Times are UTC. Each post line ends with its id and a permalink; quote the permalink when citing a post.`
+Times are UTC. Each post line ends with its id and a permalink; quote the permalink when citing a post.
+save_draft leaves an unsent draft for the user to review and send; it never posts.`
 
 // identity is what a verified access token says about the caller.
 type identity struct {
@@ -68,9 +69,10 @@ func (p *Plugin) mcpHandler() http.Handler {
 	})(streamable)
 }
 
-// readOnly and destructive annotate tools for clients that ask before acting.
+// readOnly, draftAction and writeAction annotate tools for clients that ask before acting.
 var (
 	readOnly    = &mcp.ToolAnnotations{ReadOnlyHint: true, DestructiveHint: new(false), IdempotentHint: true, OpenWorldHint: new(false)}
+	draftAction = &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: new(true), IdempotentHint: true, OpenWorldHint: new(false)}
 	writeAction = &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: new(false), IdempotentHint: false, OpenWorldHint: new(true)}
 )
 
@@ -109,6 +111,18 @@ type (
 		Post  string `json:"post" jsonschema:"post id or permalink"`
 		Emoji string `json:"emoji" jsonschema:"emoji name such as thumbsup, without colons"`
 	}
+	saveDraftIn struct {
+		Channel string `json:"channel,omitempty" jsonschema:"channel id, or team-name/channel-name; omit when giving thread"`
+		Thread  string `json:"thread,omitempty" jsonschema:"id or permalink of any post in the thread, to draft a reply there"`
+		Message string `json:"message" jsonschema:"Markdown text of the draft"`
+	}
+	draftRefIn struct {
+		Channel string `json:"channel,omitempty" jsonschema:"channel id, or team-name/channel-name; omit when giving thread"`
+		Thread  string `json:"thread,omitempty" jsonschema:"id or permalink of any post in the thread"`
+	}
+	listDraftsIn struct {
+		Team string `json:"team,omitempty" jsonschema:"optional team name or id; omit for every team"`
+	}
 	noInput struct{}
 )
 
@@ -125,7 +139,11 @@ func textResult(text string, err error) (*mcp.CallToolResult, any, error) {
 func (p *Plugin) newMCPServer(id identity) *mcp.Server {
 	cfg := p.config.get()
 	s := mcp.NewServer(&mcp.Implementation{Name: "mattermost", Title: "Mattermost", Version: manifest.Version}, &mcp.ServerOptions{Instructions: serverInstructions})
-	ts := func() *toolset { return newToolset(p.mm, id.UserID, p.siteURL(), id.ClientName) }
+	ts := func() *toolset {
+		t := newToolset(p.mm, id.UserID, p.siteURL(), id.ClientName)
+		t.drafts = p.drafts
+		return t
+	}
 
 	if cfg.ToolsChannels {
 		mcp.AddTool(s, &mcp.Tool{Name: "list_teams", Description: "List the Mattermost teams you belong to.", Annotations: readOnly},
@@ -167,6 +185,21 @@ func (p *Plugin) newMCPServer(id identity) *mcp.Server {
 		mcp.AddTool(s, &mcp.Tool{Name: "find_users", Description: "Find people in your teams by username or name.", Annotations: readOnly},
 			func(_ context.Context, _ *mcp.CallToolRequest, in findUsersIn) (*mcp.CallToolResult, any, error) {
 				return textResult(ts().FindUsers(in.Term))
+			})
+	}
+	if cfg.ToolsDrafts {
+		// Drafts count as reading: they need only mcp:read, and the user must still send them.
+		mcp.AddTool(s, &mcp.Tool{Name: "save_draft", Description: "Save a draft message in a channel or thread, as your own Mattermost draft. It is NOT sent: you review it in the message box or Drafts view and send it yourself. Replaces your existing draft in that place, if any.", Annotations: draftAction},
+			func(_ context.Context, _ *mcp.CallToolRequest, in saveDraftIn) (*mcp.CallToolResult, any, error) {
+				return textResult(ts().SaveDraft(in.Channel, in.Thread, in.Message))
+			})
+		mcp.AddTool(s, &mcp.Tool{Name: "list_drafts", Description: "List your unsent Mattermost drafts.", Annotations: readOnly},
+			func(_ context.Context, _ *mcp.CallToolRequest, in listDraftsIn) (*mcp.CallToolResult, any, error) {
+				return textResult(ts().ListDrafts(in.Team))
+			})
+		mcp.AddTool(s, &mcp.Tool{Name: "delete_draft", Description: "Discard your draft in a channel or thread.", Annotations: draftAction},
+			func(_ context.Context, _ *mcp.CallToolRequest, in draftRefIn) (*mcp.CallToolResult, any, error) {
+				return textResult(ts().DeleteDraft(in.Channel, in.Thread))
 			})
 	}
 	if cfg.EnableWriteTools && slices.Contains(id.Scopes, scopeWrite) {

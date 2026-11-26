@@ -34,6 +34,8 @@ type toolset struct {
 	siteURL    string
 	clientName string
 	now        func() time.Time
+	// drafts reads and writes the user's own drafts; nil when the draft tools are off.
+	drafts draftAPI
 
 	usernames map[string]string
 	teams     map[string]*model.Team

@@ -14,6 +14,7 @@ Add `<Site URL>/plugins/com.scaleupconsulting.mcp/mcp` as a remote MCP server (S
 - `search_posts`: Mattermost search syntax, across the user's teams or one.
 - `get_unreads`: channels with unread posts and mentions.
 - `get_me`, `find_users`: the user, and people who share a team with them.
+- `save_draft`, `list_drafts`, `delete_draft`: the user's own Mattermost drafts, in a channel or a thread, the same ones the message box and the Drafts view show. A draft is never sent: the user reviews and sends it. Drafts count as reading, so Read only connections get them, but saving or deleting one needs the same channel membership and post permission as posting. Mattermost 12.0's plugin API has no draft methods, so the plugin calls the server's own drafts REST API on its loopback listen address, with a session it creates for the user for that one call and revokes straight after. This needs Allow message drafts to sync with the server, and a listen address serving plain HTTP behind the TLS proxy.
 - `post_message`, `reply_in_thread`, `add_reaction`: only for a Read and write connection, and only while the admin allows write access. Posts carry an `mcp_client` prop naming the assistant.
 
 Every tool is annotated read-only or not. Output is compact text with a permalink per post.
