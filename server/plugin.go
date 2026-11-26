@@ -43,8 +43,8 @@ func (p *Plugin) OnActivate() error {
 	return p.API.RegisterCommand(&model.Command{
 		Trigger:          "mcp",
 		AutoComplete:     true,
-		AutoCompleteDesc: "List or disconnect the AI assistants connected to your account",
-		AutoCompleteHint: "[list | disconnect <number> | disconnect all]",
+		AutoCompleteDesc: "Connect an AI assistant, or list and disconnect the ones connected to your account",
+		AutoCompleteHint: "[help | list | disconnect <number> | disconnect all]",
 		DisplayName:      "MCP connections",
 	})
 }
@@ -136,7 +136,7 @@ func (p *Plugin) requirePageUser(w http.ResponseWriter, r *http.Request) (*model
 	return user, true
 }
 
-// handleConnections lists the user's connected assistants with a Disconnect button for each.
+// handleConnections shows how to connect an assistant, then the user's connected ones with a Disconnect button each.
 func (p *Plugin) handleConnections(w http.ResponseWriter, r *http.Request) {
 	user, ok := p.requirePageUser(w, r)
 	if !ok {
@@ -147,7 +147,7 @@ func (p *Plugin) handleConnections(w http.ResponseWriter, r *http.Request) {
 		renderError(w, http.StatusInternalServerError, "Your connections could not be loaded.")
 		return
 	}
-	page := connectionsPage{Username: user.Username, ResourceURL: p.oauth.resourceURL(), CSRF: p.sessionCSRF(r)(), Action: p.oauth.base() + "/connections/revoke"}
+	page := connectionsPage{Username: user.Username, Guide: p.connectGuide(), CSRF: p.sessionCSRF(r)(), Action: p.oauth.base() + "/connections/revoke"}
 	for _, g := range grants {
 		page.Grants = append(page.Grants, connectionRow{
 			ID: g.GrantID, Name: g.ClientName, Access: accessLabel(g.Scope), Scope: g.Scope,
@@ -187,29 +187,32 @@ func accessLabel(scope string) string {
 	return "Read only"
 }
 
-// ExecuteCommand handles /mcp: list connections, or disconnect one or all.
+// ExecuteCommand handles /mcp: connect steps, the connection list, or disconnecting one or all.
 func (p *Plugin) ExecuteCommand(_ *plugin.Context, args *model.CommandArgs) (*model.CommandResponse, *model.AppError) {
 	reply := func(text string) (*model.CommandResponse, *model.AppError) {
 		return &model.CommandResponse{ResponseType: model.CommandResponseTypeEphemeral, Text: text}, nil
 	}
 	fields := strings.Fields(args.Command)[1:]
+	pageURL := p.oauth.base() + "/connections"
+	if len(fields) == 1 && fields[0] == "help" {
+		return reply(p.connectGuide().markdown(pageURL))
+	}
 	grants, err := p.oauth.store.listGrants(args.UserId)
 	if err != nil {
 		return reply("Your connections could not be loaded.")
 	}
 	switch {
 	case len(fields) == 0 || fields[0] == "list":
+		if len(grants) == 0 {
+			return reply("No assistants are connected to your account yet.\n\n" + p.connectGuide().markdown(pageURL))
+		}
 		var b strings.Builder
 		fmt.Fprintf(&b, "MCP server address: `%s`\n", p.oauth.resourceURL())
-		if len(grants) == 0 {
-			b.WriteString("No assistants are connected to your account.")
-			return reply(b.String())
-		}
 		b.WriteString("Assistants connected to your account:\n")
 		for i, g := range grants {
 			fmt.Fprintf(&b, "%d. **%s** (%s, `%s`), connected %s, last refreshed %s\n", i+1, g.ClientName, accessLabel(g.Scope), g.Scope, formatTime(g.CreatedAt), formatTime(g.RefreshedAt))
 		}
-		fmt.Fprintf(&b, "\nDisconnect with `/mcp disconnect <number>` or `/mcp disconnect all`, or on [this page](%s/connections).", p.oauth.base())
+		fmt.Fprintf(&b, "\nDisconnect with `/mcp disconnect <number>` or `/mcp disconnect all`, or on [the connect page](%s).\nTo connect another assistant, see `/mcp help`.", pageURL)
 		return reply(b.String())
 	case fields[0] == "disconnect" && len(fields) == 2:
 		var targets []*grant
@@ -229,7 +232,7 @@ func (p *Plugin) ExecuteCommand(_ *plugin.Context, args *model.CommandArgs) (*mo
 		}
 		return reply(fmt.Sprintf("Disconnected %d assistant(s).", len(targets)))
 	}
-	return reply("Usage: `/mcp list`, `/mcp disconnect <number>` or `/mcp disconnect all`.")
+	return reply("Usage: `/mcp help`, `/mcp list`, `/mcp disconnect <number>` or `/mcp disconnect all`.")
 }
 
 // csrfMatches compares a submitted CSRF token with the session's in constant time; empty never matches.
