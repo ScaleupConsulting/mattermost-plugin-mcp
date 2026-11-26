@@ -148,7 +148,7 @@ func (p *Plugin) handleConnections(w http.ResponseWriter, r *http.Request) {
 	page := connectionsPage{Username: user.Username, ResourceURL: p.oauth.resourceURL(), CSRF: p.sessionCSRF(r)(), Action: p.oauth.base() + "/connections/revoke"}
 	for _, g := range grants {
 		page.Grants = append(page.Grants, connectionRow{
-			ID: g.GrantID, Name: g.ClientName, Access: accessLabel(g.Scope),
+			ID: g.GrantID, Name: g.ClientName, Access: accessLabel(g.Scope), Scope: g.Scope,
 			Created: formatTime(g.CreatedAt), Refreshed: formatTime(g.RefreshedAt),
 		})
 	}
@@ -179,10 +179,10 @@ func (p *Plugin) handleConnectionRevoke(w http.ResponseWriter, r *http.Request) 
 
 // accessLabel describes a grant's scope in words.
 func accessLabel(scope string) string {
-	if strings.Contains(scope, scopeWrite) {
-		return "read and post"
+	if hasScope(scope, scopeWrite) {
+		return "Read and write"
 	}
-	return "read only"
+	return "Read only"
 }
 
 // ExecuteCommand handles /mcp: list connections, or disconnect one or all.
@@ -205,7 +205,7 @@ func (p *Plugin) ExecuteCommand(_ *plugin.Context, args *model.CommandArgs) (*mo
 		}
 		b.WriteString("Assistants connected to your account:\n")
 		for i, g := range grants {
-			fmt.Fprintf(&b, "%d. **%s** (%s), connected %s, last refreshed %s\n", i+1, g.ClientName, accessLabel(g.Scope), formatTime(g.CreatedAt), formatTime(g.RefreshedAt))
+			fmt.Fprintf(&b, "%d. **%s** (%s, `%s`), connected %s, last refreshed %s\n", i+1, g.ClientName, accessLabel(g.Scope), g.Scope, formatTime(g.CreatedAt), formatTime(g.RefreshedAt))
 		}
 		fmt.Fprintf(&b, "\nDisconnect with `/mcp disconnect <number>` or `/mcp disconnect all`, or on [this page](%s/connections).", p.oauth.base())
 		return reply(b.String())

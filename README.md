@@ -4,7 +4,7 @@ A remote MCP server inside Mattermost, so Claude (a claude.ai custom connector, 
 
 ## Connecting
 
-Add `<Site URL>/plugins/com.scaleupconsulting.mcp/mcp` as a remote MCP server (Streamable HTTP). The client registers itself, opens a browser, and the user approves it on a consent page while signed in to Mattermost. Users list and disconnect their assistants at `<Site URL>/plugins/com.scaleupconsulting.mcp/connections` or with `/mcp`, `/mcp disconnect <number>` and `/mcp disconnect all`.
+Add `<Site URL>/plugins/com.scaleupconsulting.mcp/mcp` as a remote MCP server (Streamable HTTP). The client registers itself, opens a browser, and the user approves it on a consent page while signed in to Mattermost, choosing **Read only** or **Read and write** for that connection. Users list their assistants, with the access each was granted, and disconnect them at `<Site URL>/plugins/com.scaleupconsulting.mcp/connections` or with `/mcp`, `/mcp disconnect <number>` and `/mcp disconnect all`.
 
 ## Tools
 
@@ -14,9 +14,13 @@ Add `<Site URL>/plugins/com.scaleupconsulting.mcp/mcp` as a remote MCP server (S
 - `search_posts`: Mattermost search syntax, across the user's teams or one.
 - `get_unreads`: channels with unread posts and mentions.
 - `get_me`, `find_users`: the user, and people who share a team with them.
-- `post_message`, `reply_in_thread`, `add_reaction`: only when an admin turns on posting and the user approved posting for that assistant. Posts carry an `mcp_client` prop naming the assistant.
+- `post_message`, `reply_in_thread`, `add_reaction`: only for a Read and write connection, and only while the admin allows write access. Posts carry an `mcp_client` prop naming the assistant.
 
 Every tool is annotated read-only or not. Output is compact text with a permalink per post.
+
+## Access: read only or read and write
+
+Each connection holds OAuth scopes: `mcp:read` always, and `mcp:write` only when the user chose Read and write. A client may ask for `mcp:read`, `mcp:read mcp:write`, or nothing (which offers both); the user can always narrow a request to Read only, and the consent page preselects it. Write is offered only when the client asked for it and the admin setting Allow write access is on. That setting is a ceiling: with it off nobody can grant write, and existing Read and write connections lose their write tools until it is back on. The granted scope is bound to the tokens, `tools/list` shows only the tools it allows, and each write tool checks the scope of the calling token again on every call. A refresh can never widen the scope.
 
 ## Security model
 
@@ -28,7 +32,7 @@ Every tool is annotated read-only or not. Output is compact text with a permalin
 
 ## Settings
 
-Allow assistants to connect (a kill switch that keeps connections), Allow posting (off by default), one switch per tool group, and access and refresh token lifetimes.
+Allow assistants to connect (a kill switch that keeps connections), Allow write access (the write ceiling, on by default), one switch per tool group, and access and refresh token lifetimes.
 
 ## Reverse proxy
 

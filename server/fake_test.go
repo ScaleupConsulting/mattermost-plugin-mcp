@@ -54,7 +54,8 @@ func newFakeAPI() *fakeAPI {
 		sessions:    map[string]*model.Session{},
 		kv:          map[string]kvEntry{},
 		denied:      map[string]bool{},
-		clock:       time.Date(2026, 11, 26, 0, 0, 0, 0, time.UTC),
+		// The MCP SDK checks token expiry against the real clock, so the fake clock starts at real time.
+		clock: time.Now().UTC().Truncate(time.Second),
 	}
 }
 

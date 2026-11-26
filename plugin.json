@@ -13,7 +13,7 @@
         }
     },
     "settings_schema": {
-        "header": "AI assistants connect to <Site URL>/plugins/com.scaleupconsulting.mcp/mcp and sign in as a Mattermost user, who approves each assistant on a consent page. Every tool sees only the teams, channels, direct messages and posts that user can see. Users review and disconnect assistants at <Site URL>/plugins/com.scaleupconsulting.mcp/connections or with /mcp.",
+        "header": "AI assistants connect to <Site URL>/plugins/com.scaleupconsulting.mcp/mcp and sign in as a Mattermost user, who approves each assistant on a consent page and chooses Read only or Read and write for it. Every tool sees only the teams, channels, direct messages and posts that user can see. Users review and disconnect assistants at <Site URL>/plugins/com.scaleupconsulting.mcp/connections or with /mcp.",
         "footer": "",
         "settings": [
             {
@@ -25,10 +25,10 @@
             },
             {
                 "key": "EnableWriteTools",
-                "display_name": "Allow posting:",
+                "display_name": "Allow write access:",
                 "type": "bool",
-                "help_text": "When on, assistants a user approves for posting can post messages, reply in threads and add reactions as that user. Off by default: assistants can only read.",
-                "default": false
+                "help_text": "The ceiling for every connection. When on, a user approving an assistant chooses Read only or Read and write, and only Read and write lets it post messages, reply in threads and add reactions as that user. When off, nobody can grant write and existing Read and write connections lose their write tools until it is turned back on. Drafts count as reading: they are never sent.",
+                "default": true
             },
             {
                 "key": "ToolsChannels",

@@ -171,17 +171,39 @@ func (p *Plugin) newMCPServer(id identity) *mcp.Server {
 	}
 	if cfg.EnableWriteTools && slices.Contains(id.Scopes, scopeWrite) {
 		mcp.AddTool(s, &mcp.Tool{Name: "post_message", Description: "Post a new message in a channel or direct message, as you.", Annotations: writeAction},
-			func(_ context.Context, _ *mcp.CallToolRequest, in postMessageIn) (*mcp.CallToolResult, any, error) {
+			func(_ context.Context, req *mcp.CallToolRequest, in postMessageIn) (*mcp.CallToolResult, any, error) {
+				if err := p.requireWrite(req); err != nil {
+					return textResult("", err)
+				}
 				return textResult(ts().PostMessage(in.Channel, in.Message))
 			})
 		mcp.AddTool(s, &mcp.Tool{Name: "reply_in_thread", Description: "Reply in the thread containing a post, as you.", Annotations: writeAction},
-			func(_ context.Context, _ *mcp.CallToolRequest, in replyIn) (*mcp.CallToolResult, any, error) {
+			func(_ context.Context, req *mcp.CallToolRequest, in replyIn) (*mcp.CallToolResult, any, error) {
+				if err := p.requireWrite(req); err != nil {
+					return textResult("", err)
+				}
 				return textResult(ts().ReplyInThread(in.Post, in.Message))
 			})
 		mcp.AddTool(s, &mcp.Tool{Name: "add_reaction", Description: "Add an emoji reaction to a post, as you.", Annotations: writeAction},
-			func(_ context.Context, _ *mcp.CallToolRequest, in reactionIn) (*mcp.CallToolResult, any, error) {
+			func(_ context.Context, req *mcp.CallToolRequest, in reactionIn) (*mcp.CallToolResult, any, error) {
+				if err := p.requireWrite(req); err != nil {
+					return textResult("", err)
+				}
 				return textResult(ts().AddReaction(in.Post, in.Emoji))
 			})
 	}
 	return s
+}
+
+// requireWrite re-checks, on every call to a write tool, that the admin still allows posting and that
+// the access token behind this very request carries mcp:write. Tool registration already filters on
+// both, so this guards against a tool set built from anything other than the caller's own token.
+func (p *Plugin) requireWrite(req *mcp.CallToolRequest) error {
+	if !p.config.get().EnableWriteTools {
+		return errors.New("an administrator has turned off posting")
+	}
+	if req == nil || req.Extra == nil || req.Extra.TokenInfo == nil || !slices.Contains(req.Extra.TokenInfo.Scopes, scopeWrite) {
+		return errors.New("this connection was approved read only; reconnect and choose Read and write to post")
+	}
+	return nil
 }

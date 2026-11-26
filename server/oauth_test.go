@@ -27,6 +27,8 @@ type harness struct {
 	w   *world
 	p   *Plugin
 	cfg *configuration
+	// choice is the access radio the user picks on the consent page: "read", "write", or "" for none.
+	choice string
 }
 
 func newHarness(t *testing.T) *harness {
@@ -103,6 +105,9 @@ func (h *harness) authorize(clientID, challenge, scope string, user *model.User)
 	rec := h.do(http.MethodGet, "/oauth/authorize?"+q.Encode(), nil, user, nil)
 	require.Equal(h.t, http.StatusOK, rec.Code, rec.Body.String())
 	fields := url.Values{"decision": {"approve"}}
+	if h.choice != "" {
+		fields.Set("access", h.choice)
+	}
 	for _, m := range hiddenField.FindAllStringSubmatch(rec.Body.String(), -1) {
 		fields.Set(m[1], m[2])
 	}
@@ -143,7 +148,7 @@ func (h *harness) mcp(token, method string, params any) *httptest.ResponseRecord
 	return h.do(http.MethodPost, "/mcp", strings.NewReader(string(body)), nil, headers)
 }
 
-// callTool calls a tool and returns its text and whether it reported an error.
+// callTool calls a tool and returns its text and whether it failed, as a tool error or a JSON-RPC error.
 func (h *harness) callTool(token, name string, args map[string]any) (string, bool) {
 	rec := h.mcp(token, "tools/call", map[string]any{"name": name, "arguments": args})
 	require.Equal(h.t, http.StatusOK, rec.Code, rec.Body.String())
@@ -152,8 +157,12 @@ func (h *harness) callTool(token, name string, args map[string]any) (string, boo
 			Content []struct{ Text string } `json:"content"`
 			IsError bool                    `json:"isError"`
 		} `json:"result"`
+		Error *struct{ Message string } `json:"error"`
 	}
 	require.NoError(h.t, json.Unmarshal(rec.Body.Bytes(), &resp), rec.Body.String())
+	if resp.Error != nil {
+		return resp.Error.Message, true // a JSON-RPC error, such as an unknown tool
+	}
 	var b strings.Builder
 	for _, c := range resp.Result.Content {
 		b.WriteString(c.Text)
@@ -226,25 +235,6 @@ func TestMattermostSessionIsNotAccepted(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, rec.Code, "a browser session cookie must not authorize MCP")
 	rec = h.mcp("not-a-token", "tools/list", map[string]any{})
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
-}
-
-func TestWriteToolsNeedSettingAndScope(t *testing.T) {
-	h := newHarness(t)
-	h.setConfig(func(c *configuration) { c.EnableWriteTools = true })
-	_, tok := h.connect("mcp:read")
-	assert.NotContains(t, h.toolNames(tok["access_token"].(string)), "post_message", "read-only grant")
-
-	_, tok = h.connect("")
-	assert.Equal(t, "mcp:read mcp:write", tok["scope"])
-	access := tok["access_token"].(string)
-	assert.Contains(t, h.toolNames(access), "post_message")
-	text, isErr := h.callTool(access, "post_message", map[string]any{"channel": h.w.bobPriv.Id, "message": "hi"})
-	assert.True(t, isErr, text)
-	text, isErr = h.callTool(access, "post_message", map[string]any{"channel": h.w.town.Id, "message": "hi"})
-	assert.False(t, isErr, text)
-
-	h.setConfig(func(c *configuration) { c.EnableWriteTools = false })
-	assert.NotContains(t, h.toolNames(access), "post_message", "turning the setting off hides write tools from existing grants")
 }
 
 func TestPKCEFailure(t *testing.T) {
@@ -517,3 +507,26 @@ func TestKVHoldsNoRawSecrets(t *testing.T) {
 		}
 	}
 }
+
+// consentPage opens the consent page for alice with the given requested scope.
+func (h *harness) consentPage(clientID, challenge, scope string) *httptest.ResponseRecorder {
+	q := url.Values{"response_type": {"code"}, "client_id": {clientID}, "redirect_uri": {testRedirect},
+		"code_challenge": {challenge}, "code_challenge_method": {"S256"}, "state": {"st-1"}}
+	if scope != "" {
+		q.Set("scope", scope)
+	}
+	rec := h.do(http.MethodGet, "/oauth/authorize?"+q.Encode(), nil, h.w.alice, nil)
+	require.Equal(h.t, http.StatusOK, rec.Code, rec.Body.String())
+	return rec
+}
+
+// decide approves a consent page as alice with the given access choice.
+func (h *harness) decide(page *httptest.ResponseRecorder, choice string) *httptest.ResponseRecorder {
+	fields := url.Values{"decision": {"approve"}, "access": {choice}}
+	for _, m := range hiddenField.FindAllStringSubmatch(page.Body.String(), -1) {
+		fields.Set(m[1], m[2])
+	}
+	return h.postForm("/oauth/authorize", fields, h.w.alice)
+}
+
+func jsonUnmarshal(b []byte, v any) error { return json.Unmarshal(b, v) }

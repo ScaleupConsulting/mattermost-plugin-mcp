@@ -251,27 +251,47 @@ func validRedirectURI(raw string) error {
 	}
 }
 
-// parseScope validates a requested scope string and returns the granted scope. An empty request
-// gets every scope the settings allow; asking for a scope the settings forbid is an error.
+// parseScope validates a requested scope string and returns the scope the consent page may offer.
+// An empty request offers every scope the settings allow. A known scope the settings forbid, such
+// as mcp:write while the admin has turned posting off, is dropped rather than refused (RFC 6749
+// lets a server grant less than was asked for); an unknown scope is an error.
 func (o *oauthServer) parseScope(requested string) (string, error) {
 	supported := o.supportedScopes()
 	fields := strings.Fields(requested)
 	if len(fields) == 0 {
 		return strings.Join(supported, " "), nil
 	}
-	var out []string
+	out := []string{scopeRead} // every tool needs read access to find what it acts on
 	for _, s := range fields {
-		if !slices.Contains(supported, s) {
+		if s != scopeRead && s != scopeWrite {
 			return "", errors.Errorf("scope %q is not available", s)
 		}
-		if !slices.Contains(out, s) {
+		if slices.Contains(supported, s) && !slices.Contains(out, s) {
 			out = append(out, s)
 		}
 	}
-	if !slices.Contains(out, scopeRead) {
-		out = append([]string{scopeRead}, out...) // every tool needs read access to find what it acts on
-	}
 	return strings.Join(out, " "), nil
+}
+
+// hasScope reports whether a space-separated scope string contains want.
+func hasScope(scope, want string) bool {
+	return slices.Contains(strings.Fields(scope), want)
+}
+
+// grantedScope turns the user's choice on the consent page into the scope to grant. "read", or no
+// choice at all, grants read only. "write" grants read and write, but only when the client asked for
+// it and the admin still allows posting at the moment of approval.
+func (o *oauthServer) grantedScope(offered, choice string) (string, error) {
+	switch choice {
+	case "", "read":
+		return scopeRead, nil
+	case "write":
+		if !hasScope(offered, scopeWrite) || !o.config().EnableWriteTools {
+			return "", errors.New("posting is not available for this connection")
+		}
+		return scopeRead + " " + scopeWrite, nil
+	}
+	return "", errors.Errorf("unknown access choice %q", choice)
 }
 
 // canonicalResource checks a client-supplied RFC 8707 resource indicator against this server's.
@@ -348,7 +368,8 @@ func (o *oauthServer) handleAuthorize(w http.ResponseWriter, r *http.Request, se
 		ClientURI:      client.ClientURI,
 		RedirectHost:   hostOf(redirectURI),
 		Username:       user.Username,
-		CanWrite:       strings.Contains(scope, scopeWrite),
+		OfferWrite:     hasScope(scope, scopeWrite),
+		WriteAllowed:   o.config().EnableWriteTools,
 		RequestID:      reqID,
 		CSRF:           sessionCSRF(),
 		Action:         o.base() + "/oauth/authorize",
@@ -382,6 +403,12 @@ func (o *oauthServer) handleAuthorizeDecision(w http.ResponseWriter, r *http.Req
 		http.Redirect(w, r, o.redirectWith(ar.RedirectURI, map[string]string{"error": "access_denied", "error_description": "the user declined", "state": ar.State}), http.StatusSeeOther)
 		return
 	}
+	granted, err := o.grantedScope(ar.Scope, r.PostForm.Get("access"))
+	if err != nil {
+		renderError(w, http.StatusBadRequest, "Posting is not available for this assistant: it did not ask for it, or an administrator has turned posting off. Start the connection again and choose Read only.")
+		return
+	}
+	ar.Scope = granted
 	client, err := o.store.getClient(ar.ClientID)
 	if err != nil {
 		renderError(w, http.StatusBadRequest, "This assistant's registration expired. Start the connection again from the assistant.")
